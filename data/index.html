@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Counter Gateway</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="/style/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="mdi mdi-cable-data"></i> Flow Counter Gateway</h1>
+            <div class="system-info">
+                <span id="system-version"></span>
+                <span id="system-uptime"></span>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="dashboard"><i class="mdi mdi-view-dashboard"></i> Dashboard</button>
+            <button class="tab-btn" data-tab="config"><i class="mdi mdi-cog"></i> Configuration</button>
+            <button class="tab-btn" data-tab="network"><i class="mdi mdi-lan"></i> Network</button>
+            <button class="tab-btn" data-tab="files"><i class="mdi mdi-folder"></i> Files</button>
+            <button class="tab-btn" data-tab="modbus"><i class="mdi mdi-network"></i> Modbus TCP</button>
+        </nav>
+
+        <main>
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-content active">
+                <div class="status-cards">
+                    <div class="card">
+                        <h3>System Status</h3>
+                        <div class="status-grid">
+                            <div class="status-item">
+                                <span class="label">Ethernet:</span>
+                                <span id="eth-status" class="badge">Checking...</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="label">IP Address:</span>
+                                <span id="eth-ip">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="label">SD Card:</span>
+                                <span id="sd-status" class="badge">Checking...</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="label">SD Size:</span>
+                                <span id="sd-size">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="label">RS485:</span>
+                                <span id="rs485-status" class="badge">Checking...</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="label">Active Devices:</span>
+                                <span id="rs485-devices">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Modbus TCP Server</h3>
+                        <div class="status-grid">
+                            <div class="status-item">
+                                <span class="label">Port:</span>
+                                <span id="modbus-port">502</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="label">Connected Clients:</span>
+                                <span id="modbus-clients">0</span>
+                            </div>
+                        </div>
+                        <div id="modbus-client-list" class="client-list">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Flow Counter Status</h3>
+                    <div class="flow-counter-grid" id="flow-counter-grid">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Configuration Tab -->
+            <section id="config" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>RS485 Configuration</h3>
+                        <button type="submit" form="rs485-form" class="btn btn-primary">
+                            <i class="mdi mdi-content-save"></i> Save
+                        </button>
+                    </div>
+                    <form id="rs485-form" class="form-grid">
+                        <div class="form-group">
+                            <label for="baud-rate">Baud Rate:</label>
+                            <select id="baud-rate" name="baud-rate">
+                                <option value="9600">9600</option>
+                                <option value="19200">19200</option>
+                                <option value="38400">38400</option>
+                                <option value="57600">57600</option>
+                                <option value="115200">115200</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="parity">Parity:</label>
+                            <select id="parity" name="parity">
+                                <option value="none">None</option>
+                                <option value="even">Even</option>
+                                <option value="odd">Odd</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="stop-bits">Stop Bits:</label>
+                            <select id="stop-bits" name="stop-bits">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="timeout">Timeout (ms):</label>
+                            <input type="number" id="timeout" name="timeout" min="100" max="5000" step="100" value="200">
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Flow Counter Port Configuration</h3>
+                        <button id="save-ports-btn" class="btn btn-primary">
+                            <i class="mdi mdi-content-save"></i> Save
+                        </button>
+                    </div>
+                    <div id="port-config-container">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Network Tab -->
+            <section id="network" class="tab-content">
+                <div class="card">
+                    <h3>Network Configuration</h3>
+                    <form id="network-form" class="form-grid">
+                        <div class="form-group full-width">
+                            <label for="network-mode">Mode:</label>
+                            <select id="network-mode" name="mode">
+                                <option value="dhcp">DHCP</option>
+                                <option value="static">Static IP</option>
+                            </select>
+                        </div>
+                        <div class="static-ip-fields">
+                            <div class="form-group">
+                                <label for="ip-address">IP Address:</label>
+                                <input type="text" id="ip-address" name="ip" placeholder="192.168.1.100">
+                            </div>
+                            <div class="form-group">
+                                <label for="subnet">Subnet Mask:</label>
+                                <input type="text" id="subnet" name="subnet" placeholder="255.255.255.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="gateway">Gateway:</label>
+                                <input type="text" id="gateway" name="gateway" placeholder="192.168.1.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="dns">DNS Server:</label>
+                                <input type="text" id="dns" name="dns" placeholder="8.8.8.8">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="hostname">Hostname:</label>
+                            <input type="text" id="hostname" name="hostname" placeholder="gateway">
+                        </div>
+                        <div class="form-group">
+                            <label for="modbus-tcp-port">Modbus TCP Port:</label>
+                            <input type="number" id="modbus-tcp-port" name="modbusTcpPort" min="1" max="65535" value="502">
+                        </div>
+                        <div class="form-actions full-width">
+                            <button type="submit" class="btn btn-primary">Save Network Config</button>
+                            <button type="button" id="reboot-btn" class="btn btn-secondary">Reboot System</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Files Tab -->
+            <section id="files" class="tab-content">
+                <div class="card">
+                    <h3>SD Card Files</h3>
+                    <div class="file-browser">
+                        <div class="file-controls">
+                            <button id="refresh-files-btn" class="btn btn-secondary"><i class="mdi mdi-refresh"></i> Refresh</button>
+                            <span id="sd-info"></span>
+                        </div>
+                        <div id="file-list" class="file-list">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Modbus TCP Tab -->
+            <section id="modbus" class="tab-content">
+                <div class="card">
+                    <h3>Modbus TCP Status</h3>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span class="label">Status:</span>
+                            <span id="modbus-status" class="badge">Checking...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="label">Port:</span>
+                            <span id="modbus-port-detail">502</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="label">Active Connections:</span>
+                            <span id="modbus-connections">0</span>
+                        </div>
+                    </div>
+                    <div id="modbus-clients-list" class="clients-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script src="/script/script.js"></script>
+</body>
+</html>
