@@ -402,6 +402,10 @@ void setupNetworkAPI()
                 }
               }
 
+              // Log network configuration change
+              log(LOG_INFO, true, "Network configuration changed via API: mode=%s, hostname=%s\n",
+                  networkConfig.useDHCP ? "DHCP" : "Static", networkConfig.hostname);
+
               // Save configuration to storage
               saveNetworkConfig();
 

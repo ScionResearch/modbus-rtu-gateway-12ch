@@ -73,19 +73,18 @@ void mountSD(void) {
         }
     } else sdSDIOinitialised = true;
     if (sdSPIinitialised || sdSDIOinitialised) {
-        log(LOG_INFO, false, "SD card initialisation successful, using %s\n", sdSPIinitialised ? "SPI" : "SDIO");
+        log(LOG_INFO, true, "SD card initialisation successful, using %s\n", sdSPIinitialised ? "SPI" : "SDIO");
         // Check for correct folder structure and create if missing
-        log(LOG_INFO, false, "Checking for correct folder structure\n");
         if (!sd.exists("/sensors")) sd.mkdir("/sensors");
         if (!sd.exists("/logs")) sd.mkdir("/logs");
         // Check for log files and create if missing
         if (!sd.exists("/logs/system.txt")) {
-            file = sd.open("/logs/system.txt", O_CREAT | O_RDWR | O_APPEND);
-            file.close();
+            FsFile logFile = sd.open("/logs/system.txt", O_CREAT | O_WRITE);
+            logFile.close();
         }
         sdInfo.ready = true;
     }
-    if (sdInfo.ready) log(LOG_INFO, false, "SD card mounted OK\n");
+    if (sdInfo.ready) log(LOG_INFO, true, "SD card mounted and ready\n");
     if (!statusLocked) {
         statusLocked = true;
         status.sdCardOK = true;

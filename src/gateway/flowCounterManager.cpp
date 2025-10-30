@@ -281,7 +281,7 @@ void modbusResponseCallback(bool valid, uint16_t* data, uint32_t requestId) {
     }
     
     if (!valid || data == nullptr) {
-        log(LOG_WARNING, true, "Modbus read failed for port %d\n", portIndex + 1);
+        log(LOG_WARNING, false, "Modbus read failed for port %d\n", portIndex + 1);
         
         if (!flowCounterDataLocked) {
             flowCounterDataLocked = true;
@@ -377,10 +377,10 @@ void modbusResponseCallback(bool valid, uint16_t* data, uint32_t requestId) {
         leds.show();
         
         if (wasFirstConnection) {
-            log(LOG_INFO, true, "Port %d: Device connected for the first time\n", portIndex + 1);
+            log(LOG_INFO, true, "Port %d: Device '%s' connected for the first time\n", portIndex + 1, flowCounterData[portIndex].unit_ID);
         }
         
-        log(LOG_INFO, true, "Port %d TRIGGER: Unit='%s', Vol=%.2f, Vol_N=%.2f, Flow=%.2f, Flow_N=%.2f, Temp=%.1f°C, Press=%.1fkPa\n",
+        log(LOG_DEBUG, false, "Port %d TRIGGER: Unit='%s', Vol=%.2f, Vol_N=%.2f, Flow=%.2f, Flow_N=%.2f, Temp=%.1f°C, Press=%.1fkPa\n",
             portIndex + 1,
             flowCounterData[portIndex].unit_ID,
             flowCounterData[portIndex].volume,
@@ -444,7 +444,7 @@ void modbusTempPressureCallback(bool valid, uint16_t* data, uint32_t requestId) 
     }
     
     if (!valid || data == nullptr) {
-        log(LOG_WARNING, true, "Modbus temp/pressure read failed for port %d\n", portIndex + 1);
+        log(LOG_WARNING, false, "Modbus temp/pressure read failed for port %d\n", portIndex + 1);
         
         if (!flowCounterDataLocked) {
             flowCounterDataLocked = true;
@@ -517,7 +517,7 @@ void modbusTempPressureCallback(bool valid, uint16_t* data, uint32_t requestId) 
         }
         leds.show();
         
-        log(LOG_INFO, true, "Port %d PERIODIC: Current Temp %.1f->%.1f°C, Current Press %.1f->%.1fkPa | Snapshot: Vol=%.2f, Flow=%.2f, Temp=%.1f°C, Press=%.1fkPa (all unchanged)\n",
+        log(LOG_DEBUG, false, "Port %d PERIODIC: Current Temp %.1f->%.1f°C, Current Press %.1f->%.1fkPa | Snapshot: Vol=%.2f, Flow=%.2f, Temp=%.1f°C, Press=%.1fkPa (all unchanged)\n",
             portIndex + 1,
             oldCurrentTemp, flowCounterData[portIndex].currentTemperature,
             oldCurrentPressure, flowCounterData[portIndex].currentPressure,

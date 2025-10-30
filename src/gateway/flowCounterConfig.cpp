@@ -286,6 +286,9 @@ void setupGatewayConfigAPI() {
         
         // Apply RS485 changes immediately - reinitialize Modbus RTU if needed
         if (rs485Changed || timeoutChanged) {
+            log(LOG_INFO, true, "RS485 configuration changed: baud=%d, config=0x%X, timeout=%d ms\n",
+                gatewayConfig.rs485.baudRate, gatewayConfig.rs485.serialConfig, 
+                gatewayConfig.rs485.responseTimeout);
             reinit_modbusRTU();
             server.send(200, "application/json", 
                        "{\"status\":\"success\",\"message\":\"Configuration saved. RS485 interface reinitialized.\"}");

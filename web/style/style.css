@@ -674,3 +674,50 @@ header h1 .mdi {
 .btn .mdi {
     margin-right: 4px;
 }
+
+/* Footer */
+footer {
+    background: var(--bg-secondary);
+    padding: 20px 30px;
+    border-radius: 8px;
+    margin-top: 20px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.footer-content span {
+    color: var(--text-secondary);
+}
+
+.github-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+    display: inline-flex;
+    align-items: center;
+}
+
+.github-link:hover {
+    color: var(--accent-blue);
+}
+
+.github-link .mdi {
+    font-size: 1.2em;
+}
+
+@media (max-width: 600px) {
+    .footer-content {
+        flex-direction: column;
+        text-align: center;
+    }
+}
