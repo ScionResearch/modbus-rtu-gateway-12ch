@@ -337,6 +337,14 @@ bool ModbusTCPServer::handleReadRequest(uint8_t slaveId, uint8_t functionCode, u
                     // Registers 32-33: currentPressure (live pressure updated by periodic polling)
                     floatToRegs(flowCounterData[portIndex].currentPressure, dataPtr);
                     i++;
+                } else if (regAddress >= 23 && regAddress <= 29) {
+                    // Registers 23-29: Reserved (initialize to 0)
+                    dataPtr[0] = 0;
+                    dataPtr[1] = 0;
+                } else {
+                    // Any other undefined register: return 0
+                    dataPtr[0] = 0;
+                    dataPtr[1] = 0;
                 }
             }
             break;

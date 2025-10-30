@@ -11,11 +11,13 @@ const SERIAL_CONFIG_MAP = {
 document.addEventListener('DOMContentLoaded', () => {
     initializeTabs();
     initializeForms();
-    loadSystemInfo();
     loadNetworkConfig();
     loadGatewayConfig();
     loadModbusTCPStatus();
-    startAutoUpdate();
+    
+    // Start polling for updates (includes version info)
+    updateDashboard();
+    setInterval(updateDashboard, 2000); // Update every 2 seconds
 });
 
 // Tab switching
@@ -86,9 +88,10 @@ async function loadSystemInfo() {
     try {
         const response = await fetch('/api/system/version');
         const data = await response.json();
-        document.getElementById('system-version').textContent = `v${data.version}`;
+        document.getElementById('system-version').textContent = `Version ${data.version}`;
     } catch (error) {
         console.error('Failed to load system info:', error);
+        document.getElementById('system-version').textContent = 'Version: N/A';
     }
 }
 
@@ -115,11 +118,15 @@ async function updateDashboard() {
             return; // Skip other updates to preserve current UI state
         }
 
-        // Update uptime
+        // Update uptime and version
         const uptime = statusData.uptime;
         const hours = Math.floor(uptime / 3600);
         const minutes = Math.floor((uptime % 3600) / 60);
         document.getElementById('system-uptime').textContent = `Uptime: ${hours}h ${minutes}m`;
+        
+        if (statusData.version) {
+            document.getElementById('system-version').textContent = `Version ${statusData.version}`;
+        }
 
         // Ethernet status - only update if we have valid data
         if (statusData.ethernet) {

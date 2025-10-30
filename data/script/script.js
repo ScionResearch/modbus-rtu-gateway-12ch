@@ -1,7 +1,8 @@
 let updateInterval;const SERIAL_CONFIG_MAP = {
 '0': 'SERIAL_8N1','2': 'SERIAL_8E1','3': 'SERIAL_8O1'
 };document.addEventListener('DOMContentLoaded',() => {
-initializeTabs();initializeForms();loadSystemInfo();loadNetworkConfig();loadGatewayConfig();loadModbusTCPStatus();startAutoUpdate()});function initializeTabs() {
+initializeTabs();initializeForms();loadNetworkConfig();loadGatewayConfig();loadModbusTCPStatus();updateDashboard();setInterval(updateDashboard,2000);// Update every 2 seconds
+});function initializeTabs() {
 const tabBtns = document.querySelectorAll('.tab-btn');const tabContents = document.querySelectorAll('.tab-content');tabBtns.forEach(btn => {
 btn.addEventListener('click',() => {
 const targetTab = btn.dataset.tab;tabBtns.forEach(b => b.classList.remove('active'));tabContents.forEach(c => c.classList.remove('active'));btn.classList.add('active');document.getElementById(targetTab).classList.add('active');if(targetTab === 'files') {
@@ -19,8 +20,8 @@ await rebootSystem()}
 loadFileList()})}
 async function loadSystemInfo() {
 try {
-const response = await fetch('/api/system/version');const data = await response.json();document.getElementById('system-version').textContent = `v${data.version}`} catch (error) {
-console.error('Failed to load system info:',error)}
+const response = await fetch('/api/system/version');const data = await response.json();document.getElementById('system-version').textContent = `Version ${data.version}`} catch (error) {
+console.error('Failed to load system info:',error);document.getElementById('system-version').textContent = 'Version: N/A'}
 }
 async function updateDashboard() {
 try {
@@ -30,7 +31,9 @@ console.warn('System status request failed:',statusResponse.status);return;// Ke
 const statusData = await statusResponse.json();if(statusData.busy) {
 const uptime = statusData.uptime;const hours = Math.floor(uptime / 3600);const minutes = Math.floor((uptime % 3600) / 60);document.getElementById('system-uptime').textContent = `Uptime: ${hours}h ${minutes}m`;return;// Skip other updates to preserve current UI state
 }
-const uptime = statusData.uptime;const hours = Math.floor(uptime / 3600);const minutes = Math.floor((uptime % 3600) / 60);document.getElementById('system-uptime').textContent = `Uptime: ${hours}h ${minutes}m`;if(statusData.ethernet) {
+const uptime = statusData.uptime;const hours = Math.floor(uptime / 3600);const minutes = Math.floor((uptime % 3600) / 60);document.getElementById('system-uptime').textContent = `Uptime: ${hours}h ${minutes}m`;if(statusData.version) {
+document.getElementById('system-version').textContent = `Version ${statusData.version}`}
+if(statusData.ethernet) {
 if(statusData.ethernet.connected) {
 document.getElementById('eth-status').textContent = statusData.ethernet.dhcp ? 'DHCP' : 'Static';document.getElementById('eth-status').className = 'badge success';document.getElementById('eth-ip').textContent = statusData.ethernet.ip} else {
 document.getElementById('eth-status').textContent = 'Disconnected';document.getElementById('eth-status').className = 'badge error';document.getElementById('eth-ip').textContent = '--'}

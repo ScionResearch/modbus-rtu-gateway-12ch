@@ -472,8 +472,9 @@ void setupWebServer()
       ethernet["dhcp"] = networkConfig.useDHCP;
     }
     
-    // System uptime
+    // System uptime and version
     doc["uptime"] = millis() / 1000;
+    doc["version"] = VERSION;
           
     // SD card info
     JsonObject sd = doc.createNestedObject("sd");
