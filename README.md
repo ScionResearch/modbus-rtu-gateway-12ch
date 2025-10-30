@@ -14,10 +14,12 @@ A high-performance Modbus gateway system for 12 gas flow counter units, converti
 ## Firmware Features
 
 ### 1. Modbus RTU Master
-- Non-blocking operation
-- Trigger-based polling (reads on trigger event)
-- Configurable baud rate, parity, and timeout via Web UI
-- Automatic data caching
+- Non-blocking operation using queue-based architecture
+- Trigger-based polling (reads all data on trigger event)
+- Periodic polling (every 10 seconds for temperature/pressure monitoring)
+- Configurable baud rate (300-115200), parity (none/even/odd), stop bits (1 or 2), and timeout via Web UI
+- Configuration changes apply immediately without system restart
+- Automatic data caching with separate snapshot and current values
 
 ### 2. Modbus TCP Server
 - Up to 4 simultaneous client connections
@@ -26,17 +28,24 @@ A high-performance Modbus gateway system for 12 gas flow counter units, converti
 - Function codes 0x03 and 0x04 supported
 
 ### 3. Flow Counter Data Structure
-Each flow counter provides 23 registers (46 bytes):
+
+Each flow counter stores two data sets:
+
+**Snapshot Data** (captured on trigger events, registers 0-22):
 - `volume` (float)
 - `volume_normalised` (float)
 - `flow` (float)
 - `flow_normalised` (float)
-- `temperature` (float)
-- `pressure` (float)
+- `temperature` (float) - snapshot at trigger time
+- `pressure` (float) - snapshot at trigger time
 - `timestamp` (uint32_t)
 - `psu_volts` (float)
 - `batt_volts` (float)
 - `unit_ID` (10 bytes, char array)
+
+**Current Data** (updated periodically, registers 23-26):
+- `current_temperature` (float) - real-time monitoring
+- `current_pressure` (float) - real-time monitoring
 
 ### 4. SD Card Logging
 - Automatic CSV file creation per flow counter
@@ -47,20 +56,21 @@ Each flow counter provides 23 registers (46 bytes):
 
 ### 5. LED Status Indication
 - **LED 0 (System)**: Blinks to show system OK (orange = SD/PSU warning)
-- **LED 1 (RS485)**: Blue = busy, Green = connected, Off = idle
+- **LED 1 (RS485)**: Cyan = busy, Off = idle
 - **LED 2-13 (Channels 1-12)**:
   - Off = Port not configured
-  - Dim yellow = Configured but no data
+  - Purple = Configured but never connected
   - Green = Data valid, communication OK
-  - Red = Communication error
-  - Blue = Trigger active
+  - Red = Communication error (previously connected device offline)
+  - Cyan = Modbus request pending
+  - Blue = Trigger active (overrides other states while active)
 
 ### 6. Web UI
 Modern dark-themed interface with:
-- **Dashboard**: Real-time flow counter data and system status
-- **Configuration**: RS485 settings and per-port flow counter config
+- **Dashboard**: Real-time flow counter data (snapshot and current), system status, manual read buttons
+- **Configuration**: RS485 settings (baud, parity, stop bits, timeout) and per-port flow counter config
 - **Network**: IP configuration (DHCP/Static), hostname, Modbus TCP port
-- **Files**: SD card file browser with download capability
+- **Files**: SD card file browser with system log access, view/download/delete controls
 - **Modbus TCP**: Connection status and client list
 
 ## Project Structure
@@ -112,17 +122,19 @@ All configuration stored in LittleFS (flash memory) as JSON:
 
 ### Gateway
 - `GET /api/gateway/config` - Get gateway configuration
-- `POST /api/gateway/config` - Update gateway configuration
+- `POST /api/gateway/config` - Update gateway configuration (auto-reinitializes Modbus RTU)
 - `GET /api/gateway/data` - Get all flow counter data
+- `POST /api/gateway/manual-read` - Trigger manual read for specific port
 
 ### Modbus TCP
 - `GET /api/modbus-tcp/status` - Get Modbus TCP status
 - `POST /api/modbus-tcp/config` - Update Modbus TCP configuration
 
 ### SD Card
-- `GET /api/sd/list?path=/` - List directory contents
+- `GET /api/sd/list?path=/` - List directory contents (includes system log size)
 - `GET /api/sd/download?path=<file>` - Download file
-- `GET /api/sd/view?path=<file>` - View file contents
+- `GET /api/sd/view?path=<file>` - View file contents in browser
+- `DELETE /api/sd/delete?path=<file>` - Delete file
 
 ## Dual-Core Architecture
 
@@ -162,8 +174,8 @@ pio run -t uploadfs
 - **Hostname**: flow-gateway
 - **Modbus TCP Port**: 502
 - **RS485 Baud**: 9600
-- **RS485 Config**: 8N1
-- **Timeout**: 1000ms
+- **RS485 Config**: 8N1 (8 data bits, no parity, 1 stop bit)
+- **RS485 Timeout**: 200ms
 - **All ports**: Disabled by default
 
 ## Usage
@@ -172,11 +184,12 @@ pio run -t uploadfs
 2. Connect Ethernet cable
 3. Find IP address (check your DHCP server or connect serial monitor)
 4. Open web browser to gateway IP
-5. Configure RS485 settings (baud rate, parity)
+5. Configure RS485 settings (baud rate, parity, stop bits, timeout)
 6. Configure each port (enable, slave ID, name, SD logging)
 7. Connect flow counters to RS485 daisy chain
 8. Connect trigger wires from flow counters to gateway trigger inputs
-9. Monitor dashboard for real-time data
+9. Use manual read buttons to verify flow counters are responding
+10. Monitor dashboard for real-time snapshot and current temperature/pressure data
 
 ## CSV Log Format
 
@@ -191,13 +204,14 @@ Timestamp,Volume,Volume_Norm,Flow,Flow_Norm,Temperature,Pressure,PSU_Volts,Batt_
 ## Trigger Inputs
 
 - Trigger inputs are **active LOW** (pulled high internally with INPUT_PULLUP)
+- Edge-detected (not level-based) - triggers on falling edge
 - When a flow counter pulls its trigger line LOW, the gateway:
-  1. Detects the trigger
-  2. Queues a Modbus RTU read request for that slave ID
-  3. Reads all 23 registers
-  4. Updates the internal data cache
-  5. Logs to SD card if enabled
-  6. Makes data available via Modbus TCP
+  1. Detects the falling edge
+  2. Queues a Modbus RTU read request for registers 0-22 (snapshot data)
+  3. Updates the internal snapshot data cache
+  4. Logs snapshot data to SD card if enabled
+  5. Makes data available via Modbus TCP
+  6. Increments trigger count for the port
 
 ## Hardware Connections
 
@@ -242,11 +256,13 @@ Timestamp,Volume,Volume_Norm,Flow,Flow_Norm,Temperature,Pressure,PSU_Volts,Batt_
 
 ## Performance Notes
 
-- **Modbus RTU**: Processes one trigger at a time to avoid queue overflow
+- **Modbus RTU**: Queue-based with one request processed at a time
+- **Periodic Polling**: Every 10 seconds for temperature/pressure monitoring (registers 23-26)
 - **Modbus TCP**: Can serve multiple clients simultaneously
 - **Update Rate**: Dashboard refreshes every 2 seconds
-- **Trigger Check**: Scanned every 10ms
+- **Trigger Check**: Scanned every 10ms using edge detection
 - **SD Card**: Logging is non-blocking
+- **Config Changes**: RS485 settings apply immediately without restart (baud, parity, stop bits, timeout)
 
 ## Technical Details
 
@@ -257,27 +273,34 @@ Timestamp,Volume,Volume_Norm,Flow,Flow_Norm,Temperature,Pressure,PSU_Volts,Batt_
 
 ### Modbus Register Mapping
 Flow counter data is mapped to Modbus registers as follows:
+
+**Snapshot Data** (updated on trigger events):
 - Registers 0-1: volume (float)
 - Registers 2-3: volume_normalised (float)
 - Registers 4-5: flow (float)
 - Registers 6-7: flow_normalised (float)
-- Registers 8-9: temperature (float)
-- Registers 10-11: pressure (float)
+- Registers 8-9: temperature (float) - snapshot at trigger
+- Registers 10-11: pressure (float) - snapshot at trigger
 - Registers 12-13: timestamp (uint32_t)
 - Registers 14-15: psu_volts (float)
 - Registers 16-17: batt_volts (float)
 - Registers 18-22: unit_ID (10 bytes)
 
+**Current Data** (updated every 10 seconds):
+- Registers 23-24: current_temperature (float)
+- Registers 25-26: current_pressure (float)
+
 ### Float Encoding
 All floats are stored as IEEE 754 single-precision (32-bit) big-endian format across 2 Modbus registers.
 
-## Future Enhancements
-
-- [ ] Add email/SMS alerts for communication errors
-- [ ] Implement data trending and graphing
-- [ ] Add MQTT publishing support
-- [ ] Implement backup/restore for configuration
-- [ ] Add scheduled polling (in addition to trigger-based)
+### Serial Configuration
+The RS485 interface supports Arduino SERIAL_* constants:
+- **8N1** (0x413 = 1043): 8 data bits, no parity, 1 stop bit
+- **8N2** (0x433 = 1075): 8 data bits, no parity, 2 stop bits
+- **8E1** (0x411 = 1041): 8 data bits, even parity, 1 stop bit
+- **8E2** (0x431 = 1073): 8 data bits, even parity, 2 stop bits
+- **8O1** (0x412 = 1042): 8 data bits, odd parity, 1 stop bit
+- **8O2** (0x432 = 1074): 8 data bits, odd parity, 2 stop bits
 
 ## License
 
