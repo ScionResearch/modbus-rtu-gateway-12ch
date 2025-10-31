@@ -43,9 +43,16 @@ Each flow counter stores two data sets:
 - `batt_volts` (float)
 - `unit_ID` (10 bytes, char array)
 
-**Current Data** (updated periodically, registers 23-26):
+**Current Data** (updated periodically, registers 30-33):
 - `current_temperature` (float) - real-time monitoring
 - `current_pressure` (float) - real-time monitoring
+
+**Accessing Data**
+- Connect via modbus TCP to port 502
+- Slave ID should match target unit slave ID
+- Function code 0x03 (read holding registers) supported
+- Registers 0-22 for snapshot data (updated on flow trigger only)
+- Registers 30-33 for current data (updated every 10 seconds)
 
 ### 4. SD Card Logging
 - Automatic CSV file creation per flow counter
@@ -287,8 +294,8 @@ Flow counter data is mapped to Modbus registers as follows:
 - Registers 18-22: unit_ID (10 bytes)
 
 **Current Data** (updated every 10 seconds):
-- Registers 23-24: current_temperature (float)
-- Registers 25-26: current_pressure (float)
+- Registers 30-31: current_temperature (float)
+- Registers 32-33: current_pressure (float)
 
 ### Float Encoding
 All floats are stored as IEEE 754 single-precision (32-bit) big-endian format across 2 Modbus registers.
@@ -304,11 +311,4 @@ The RS485 interface supports Arduino SERIAL_* constants:
 
 ## License
 
-Copyright © 2025 Scion Research
-
-## Support
-
-For issues or questions, please check:
-1. Serial console output (115200 baud)
-2. SD card log files
-3. Web UI system status page
+Copyright © 2025 Bioeconomy Science Institute - Scion Group
