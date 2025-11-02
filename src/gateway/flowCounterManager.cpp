@@ -9,11 +9,12 @@ volatile bool triggerStates[MAX_FLOW_COUNTERS] = {false};  // Track previous sta
 static uint32_t lastTriggerCheck = 0;
 // lastOfflineCheck removed - checkOfflineDevices() no longer used
 static uint32_t lastPeriodicPoll = 0;
+static uint8_t nextPeriodicPollChannel = 0;  // Track which channel to poll next
 static uint16_t modbusBuffer[FC_REGISTER_COUNT];
 static uint16_t modbusTempPressureBuffer[FC_TEMP_PRESSURE_COUNT];
 
 #define TRIGGER_CHECK_INTERVAL 10        // Check triggers every 10ms
-#define PERIODIC_POLL_INTERVAL 10000     // Poll all configured devices every 10 seconds (for testing)
+#define PERIODIC_POLL_INTERVAL 833       // Staggered polling: 10000ms / 12 channels = 833ms per channel
 
 void init_flowCounterManager() {
     // Initialize ModbusRTU on Serial1 (UART0)
@@ -122,7 +123,8 @@ void manage_flowCounterManager() {
     //   - Error recovery (temp/pressure reads check if offline devices have recovered)
     // Keeping the function for potential future use but not calling it
     
-    // Periodic poll of all configured devices (every 10 seconds during testing, normally 1 minute)
+    // Staggered periodic polling: polls one channel every 833ms (complete cycle in ~10 seconds)
+    // This prevents queue overflow (queue holds 10 items, we have 12 channels)
     if (millis() - lastPeriodicPoll >= PERIODIC_POLL_INTERVAL) {
         lastPeriodicPoll = millis();
         periodicPollConfiguredDevices();
@@ -135,7 +137,7 @@ void manage_flowCounterManager() {
             log(LOG_DEBUG, false, "Processing trigger for port %d (triggerState:%d)\n", 
                 i + 1, triggerStates[i]);
             triggerFlags[i] = false;
-            readFlowCounter(i);
+            readFlowCounter(i, true);  // fromTrigger = true
             break;  // Process one at a time to avoid queue overflow
         }
     }
@@ -192,15 +194,19 @@ void checkTriggers() {
     }
 }
 
-void readFlowCounter(uint8_t portIndex) {
+void readFlowCounter(uint8_t portIndex, bool fromTrigger) {
     if (portIndex >= MAX_FLOW_COUNTERS) return;
     
     uint8_t slaveId = gatewayConfig.ports[portIndex].slaveId;
     
+    // Encode trigger flag in upper byte of requestId (portIndex is only 0-11, uses lower byte)
+    // Bit 8 indicates this is a trigger-initiated read
+    uint32_t requestId = portIndex | (fromTrigger ? 0x100 : 0);
+    
     // Queue the read request
     if (!modbusRTU.readHoldingRegisters(slaveId, FC_START_ADDRESS, modbusBuffer, 
                                         FC_REGISTER_COUNT, modbusResponseCallback, 
-                                        portIndex)) {
+                                        requestId)) {
         log(LOG_WARNING, false, "Failed to queue read request for port %d\n", portIndex + 1);
         
         // Mark as comm error only if device was previously connected
@@ -253,8 +259,12 @@ void readFlowCounterTempPressure(uint8_t portIndex) {
             flowCounterData[portIndex].modbusRequestPending = false;
             flowCounterDataLocked = false;
             
-            // Set LED state immediately to show red
-            leds.setPixelColor(portIndex + 2, LED_COLOR_RED);  // Red
+            // Set LED state immediately to show red if device was previously connected
+            if (flowCounterData[portIndex].dataValid) {
+                leds.setPixelColor(portIndex + 2, LED_COLOR_RED);  // Red
+            } else {
+                leds.setPixelColor(portIndex + 2, LED_COLOR_PURPLE);  // Purple
+            }
             leds.show();
         }
     } else {
@@ -273,7 +283,9 @@ void readFlowCounterTempPressure(uint8_t portIndex) {
 }
 
 void modbusResponseCallback(bool valid, uint16_t* data, uint32_t requestId) {
-    uint8_t portIndex = (uint8_t)requestId;
+    // Extract port index and trigger flag from requestId
+    uint8_t portIndex = (uint8_t)(requestId & 0xFF);
+    bool fromTrigger = (requestId & 0x100) != 0;
     
     if (portIndex >= MAX_FLOW_COUNTERS) {
         log(LOG_ERROR, false, "Invalid port index in callback: %d\n", portIndex);
@@ -291,7 +303,11 @@ void modbusResponseCallback(bool valid, uint16_t* data, uint32_t requestId) {
             }
             flowCounterData[portIndex].modbusRequestPending = false;
             flowCounterDataLocked = false;
-            leds.setPixelColor(portIndex + 2, LED_COLOR_RED);  // Red for error
+            if (flowCounterData[portIndex].dataValid) {
+                leds.setPixelColor(portIndex + 2, LED_COLOR_RED);  // Red for error
+            } else {
+                leds.setPixelColor(portIndex + 2, LED_COLOR_PURPLE);  // Purple for not yet connected
+            }
             leds.show();
         }
         return;
@@ -367,7 +383,12 @@ void modbusResponseCallback(bool valid, uint16_t* data, uint32_t requestId) {
         flowCounterData[portIndex].dataValid = true;
         flowCounterData[portIndex].commError = false;
         flowCounterData[portIndex].lastUpdate = millis();
-        flowCounterData[portIndex].triggerCount++;
+        
+        // Only increment trigger count if this was an actual trigger event
+        if (fromTrigger) {
+            flowCounterData[portIndex].triggerCount++;
+        }
+        
         flowCounterData[portIndex].modbusRequestPending = false;  // Clear pending flag
         
         flowCounterDataLocked = false;
@@ -582,26 +603,30 @@ void checkOfflineDevices() {
     checkIndex = 0;
 }
 
-// Periodic poll of all configured devices (every 10 seconds during testing, normally 1 minute)
+// Staggered periodic polling of configured devices (one channel per call)
+// Complete cycle takes ~10 seconds (833ms * 12 channels)
 // This keeps temperature and pressure readings up-to-date and verifies device connectivity
+// Staggering prevents queue overflow (queue holds 10 items, we have 12 channels)
+// NOTE: Always cycles through all 12 channels to maintain consistent timing, 
+//       but only polls enabled channels. This ensures polling interval is 
+//       always 10 seconds regardless of how many channels are enabled.
 // Strategy:
 //   - Never-connected devices (dataValid == false): Do full read to get initial data
 //   - Connected devices (dataValid == true): Do temp/pressure-only read to preserve snapshot values
 //   - Devices in error that were previously connected: Do temp/pressure read to check recovery
 void periodicPollConfiguredDevices() {
-    // Poll all enabled devices with appropriate read type
-    for (int i = 0; i < MAX_FLOW_COUNTERS; i++) {
-        if (gatewayConfig.ports[i].enabled) {
-            if (!flowCounterData[i].dataValid) {
-                // Never connected - do full read to get initial data
-                readFlowCounter(i);
-            } else {
-                // Previously connected - temp/pressure only to preserve snapshot
-                readFlowCounterTempPressure(i);
-            }
-            
-            // Small delay between device reads to avoid bus congestion
-            delay(10);
+    // Check if current channel is enabled and poll it
+    if (gatewayConfig.ports[nextPeriodicPollChannel].enabled) {
+        if (!flowCounterData[nextPeriodicPollChannel].dataValid) {
+            // Never connected - do full read to get initial data
+            readFlowCounter(nextPeriodicPollChannel);
+        } else {
+            // Previously connected - temp/pressure only to preserve snapshot
+            readFlowCounterTempPressure(nextPeriodicPollChannel);
         }
     }
+    
+    // Always move to next channel (even if current was disabled)
+    // This ensures consistent 10-second cycle time regardless of enabled channel count
+    nextPeriodicPollChannel = (nextPeriodicPollChannel + 1) % MAX_FLOW_COUNTERS;
 }

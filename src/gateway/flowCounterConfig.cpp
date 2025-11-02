@@ -391,7 +391,7 @@ void setupGatewayConfigAPI() {
         }
         
         // Trigger a manual read
-        readFlowCounter(portIndex);
+        readFlowCounter(portIndex, false);
         
         server.send(200, "application/json", "{\"status\":\"success\",\"message\":\"Manual read triggered\"}");
     });

@@ -16,7 +16,9 @@ A high-performance Modbus gateway system for 12 gas flow counter units, converti
 ### 1. Modbus RTU Master
 - Non-blocking operation using queue-based architecture
 - Trigger-based polling (reads all data on trigger event)
-- Periodic polling (every 10 seconds for temperature/pressure monitoring)
+- Staggered periodic polling (one channel every 833ms, complete cycle in ~10 seconds)
+  - Prevents queue overflow with 12 channels (queue holds 10 requests)
+  - Updates temperature/pressure monitoring data
 - Configurable baud rate (300-115200), parity (none/even/odd), stop bits (1 or 2), and timeout via Web UI
 - Configuration changes apply immediately without system restart
 - Automatic data caching with separate snapshot and current values
@@ -52,7 +54,8 @@ Each flow counter stores two data sets:
 - Slave ID should match target unit slave ID
 - Function code 0x03 (read holding registers) supported
 - Registers 0-22 for snapshot data (updated on flow trigger only)
-- Registers 30-33 for current data (updated every 10 seconds)
+- Registers 23-29 reserved (returns 0)
+- Registers 30-33 for current data (updated via staggered polling, ~10 second cycle)
 
 ### 4. SD Card Logging
 - Automatic CSV file creation per flow counter

@@ -13,7 +13,7 @@ void init_flowCounterManager();
 void reinit_modbusRTU();  // Reinitialize Modbus RTU with new settings
 void manage_flowCounterManager();
 void checkTriggers();
-void readFlowCounter(uint8_t portIndex);
+void readFlowCounter(uint8_t portIndex, bool fromTrigger = false);
 void readFlowCounterTempPressure(uint8_t portIndex);  // Read only temp/pressure for periodic updates
 void pollAllConfiguredDevices();        // Poll all enabled ports on startup
 void checkOfflineDevices();             // Periodically poll offline devices
